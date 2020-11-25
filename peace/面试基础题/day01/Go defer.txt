@@ -1,0 +1,166 @@
+1、defer的作用和执行时机
+go的defer语句是用来延迟执行函数的，而且延迟发生在调用函数return之后。
+
+func a() int{
+	defer b()
+	return 0
+}
+
+b的执行是发生在return 0之后，注意defer的语法，关键字defer之后是函数的调用。
+
+
+
+2、defer的重要用途之一：清理释放资源
+由于defer的延迟特性，defer常用在函数调用结束后清理相关的资源，比如：
+
+ f,_ := os.Open(filename)
+ defer f.close()
+
+
+
+ 3、defer的重要用途之二：执行recover
+ recover是go语言的内置函数，它的主要作用是可以让进入宕机流程中的goroutine恢复过来，recover仅在延迟函数defer中有效，
+ 在正常的执行过程中，调用recover会返回nil并且没有其他任何效果，如果当前的goroutine陷入恐慌，调用recover可以捕获到
+ panic的输入值，并且恢复正常的执行。通常来说，不应该对进入panic宕机的程序做任何处理，但有时，需要我们可以从宕机中恢复，
+ 至少我们可以在程序崩溃前，做一些操作，举个例子，当web服务器遇到不可预料的严重问题时，在崩溃前应该将所有的连接关闭，
+ 如果不做任何处理，会使得客户端一直处于等待状态，如果web服务器还在开发阶段，服务器甚至可以将异常信息反馈到客户端，帮助
+ 调试。
+
+func f(){
+	defer func(){
+		if r:=recover();r!=nil{
+			fmt.Println("Recovered in f",r)
+		}
+	}()
+	fmt.Println("Calling g.")
+	g(0)
+	fmt.Println("Returned normally from g.")
+}
+
+func g(i int){
+	if i>3{
+		fmt.Println("Panicking!")
+		panic(fmt.Sprintf("%v",i))
+	}
+	fmt.Println("Printing in g",i)
+	defer fmt.Println("Defer in g",i)
+
+	g(i+1)
+}
+
+func TestException(t *testing.T){
+	f()
+	fmt.Println("Returned normally from f.")
+}
+
+
+out:
+
+Calling g.
+Printing in g 0
+Printing in g 1
+Printing in g 2
+Printing in g 3
+Panicking!
+Defer in g 3
+Defer in g 2
+Defer in g 1
+Defer in g 0
+Recovered in f 4
+Returned normally from f.
+
+defer 的执行顺序是后进先出（栈）。当出现 panic 语句的时候，会先按照 defer 的后进先出的顺序执行，最后才会执行panic。
+
+4、被deferred函数的参数在defer时确定
+一个函数在被defer时，它的参数在defer时进行计算确定，即使defer之后参数发生修改，对已经defer的函数没有影响。
+
+func a(){
+	i :=0
+	defer fmt.Println(i)
+	i++
+	return
+}
+
+a 执行输出的是 0 而不是 1，因为 defer 时，i 的值是 0，此时被 defer 的函数参数已经进行执行计算并确定了。
+
+5、被defer的函数可以读取和修改带名称的返回值
+
+func c() (i int){
+	defer func() {
+		i++
+		fmt.Println(i)
+	}()
+	return 1
+}
+
+被 defer 的函数是在 return 之后执行，可以修改带名称的返回值，上面的函数 c 返回的是 2。
+
+6、defer表达式的函数如果定义在panic后面，该函数在panic后就无法被执行到
+
+在defer前panic:
+func main() {
+    panic("a")
+    defer func() {
+        fmt.Println("b")
+    }()
+}
+结果，b没有被打印出来,在defer后panic
+func main() {
+    defer func() {
+        fmt.Println("b")
+    }()
+    panic("a")
+}
+结果，b被正常打印
+
+7、F函数中出现panic时，F函数会立刻终止，不会执行函数内panic后面的内容，但不会立刻return
+而是调用F的defer,如果F的defer中有recover捕获，则F在执行完defer后正常返回，调用函数F的函数
+G继续正常执行
+
+func G() {
+    defer func() {
+        fmt.Println("c")
+    }()
+    F()
+    fmt.Println("继续执行")
+}
+
+func F() {
+    defer func() {
+        if err := recover(); err != nil {
+            fmt.Println("捕获异常:", err)
+        }
+        fmt.Println("b")
+    }()
+    panic("a")
+}
+
+结果：
+捕获异常: a
+b
+继续执行
+c
+
+8、如果F的defer中无recover捕获，则将panic抛到G中，G函数会立刻终止，不会执行G函数内后面的内容，但不会立刻ruturn,
+而调用G的defer...以此类推。如果一直没有recover，抛出的panic到当前goroutine最上层函数时，程序直接异常终止。
+
+func G() {
+	defer func() {
+		//goroutine外进行recover
+		if err := recover(); err != nil {
+			fmt.Println("捕获异常:", err)
+		}
+		fmt.Println("c")
+	}()
+	//创建goroutine调用F函数，这里是新建了一个协程，
+	go F()
+	time.Sleep(time.Second)
+}
+
+func F() {
+	defer func() {
+		fmt.Println("b")
+	}()
+	//goroutine内部抛出panic
+	panic("a")
+}
