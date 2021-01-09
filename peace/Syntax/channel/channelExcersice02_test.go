@@ -18,7 +18,7 @@ import (
 
 */
 
-//改进版本 管道  不同协程之间的通信---解决方案之一——全局变量加锁
+//改进版本 协程&通道.md  不同协程之间的通信---解决方案之一——全局变量加锁
 var (
 	myChannel = make(chan map[int]int,20)
 	exitChan = make(chan bool,1)

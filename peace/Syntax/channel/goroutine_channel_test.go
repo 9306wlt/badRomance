@@ -28,7 +28,8 @@ func readData(intChan chan int, exitChan chan bool){
 
 func Test_goroutine_channel(t *testing.T){
 
-	//创建两个管道
+	//创建两个管道，缓冲信道
+	//缓冲信到和无缓冲信道，是看你创建信道的时候有没有设置容量
 	intChan := make(chan int,50)
 	exitChan := make(chan bool,1)
 
