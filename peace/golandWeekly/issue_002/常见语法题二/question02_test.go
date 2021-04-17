@@ -18,7 +18,6 @@ func Test_question02(t *testing.T){
     for _,stu :=range stus{
         fmt.Println(stu,&stu)
         m[stu.Name] = &stu
-
     }
     fmt.Println(m)
 
