@@ -1,8 +1,8 @@
 package arrays
 
 import (
-    "fmt"
-    "testing"
+"fmt"
+"testing"
 )
 
 func Test_array01(t *testing.T){
